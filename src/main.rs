@@ -5,6 +5,8 @@ use cpal::{
     Device, SampleFormat, Stream, SupportedStreamConfig,
 };
 
+use anyhow::anyhow;
+
 fn get_index_from_user(max: usize) -> std::io::Result<usize> {
     let mut user_input = String::new();
     loop {
@@ -26,123 +28,112 @@ fn dump<T: std::fmt::Display>(val: T) {
     std::io::stdout().flush().unwrap();
 }
 
-fn build_stream(device: &Device, config: SupportedStreamConfig) -> Result<Stream, &'static str> {
+fn build_stream(device: &Device, config: SupportedStreamConfig) -> Result<Stream, anyhow::Error> {
     let err_fn = move |err| {
         eprintln!("an error occurred on stream: {}", err);
     };
-    match config.sample_format() {
+    let d = match config.sample_format() {
         SampleFormat::I8 => device
             .build_input_stream(
                 &config.into(),
                 |data: &[i8], _: &_| dump(data[0]),
                 err_fn,
                 None,
-            )
-            .map_err(|_| "failed to create stream"),
+            )?,
         SampleFormat::I16 => device
             .build_input_stream(
                 &config.into(),
                 |data: &[i16], _: &_| dump(data[0]),
                 err_fn,
                 None,
-            )
-            .map_err(|_| "failed to create stream"),
+            )?,
         SampleFormat::I32 => device
             .build_input_stream(
                 &config.into(),
                 |data: &[i32], _: &_| dump(data[0]),
                 err_fn,
                 None,
-            )
-            .map_err(|_| "failed to create stream"),
+            )?,
         SampleFormat::I64 => device
             .build_input_stream(
                 &config.into(),
                 |data: &[i64], _: &_| dump(data[0]),
                 err_fn,
                 None,
-            )
-            .map_err(|_| "failed to create stream"),
+            )?,
         SampleFormat::U8 => device
             .build_input_stream(
                 &config.into(),
                 |data: &[u8], _: &_| dump(data[0]),
                 err_fn,
                 None,
-            )
-            .map_err(|_| "failed to create stream"),
+            )?,
         SampleFormat::U16 => device
             .build_input_stream(
                 &config.into(),
                 |data: &[u16], _: &_| dump(data[0]),
                 err_fn,
                 None,
-            )
-            .map_err(|_| "failed to create stream"),
+            )?,
         SampleFormat::U32 => device
             .build_input_stream(
                 &config.into(),
                 |data: &[u32], _: &_| dump(data[0]),
                 err_fn,
                 None,
-            )
-            .map_err(|_| "failed to create stream"),
+            )?,
         SampleFormat::U64 => device
             .build_input_stream(
                 &config.into(),
                 |data: &[u64], _: &_| dump(data[0]),
                 err_fn,
                 None,
-            )
-            .map_err(|_| "failed to create stream"),
+            )?,
         SampleFormat::F32 => device
             .build_input_stream(
                 &config.into(),
                 |data: &[f32], _: &_| dump(data[0]),
                 err_fn,
                 None,
-            )
-            .map_err(|_| "failed to create stream"),
+            )?,
         SampleFormat::F64 => device
             .build_input_stream(
                 &config.into(),
                 |data: &[f64], _: &_| dump(data[0]),
                 err_fn,
                 None,
-            )
-            .map_err(|_| "failed to create stream"),
-        _ => Err("Unsupported format"),
-    }
+            )?,
+        _ => return Err(anyhow!("Unsupported format")),
+    };
+    Ok(d)
 }
 
-fn run_app(device: &Device) -> Result<(), &'static str> {
+fn run_app(device: &Device) -> Result<(), anyhow::Error> {
     // TODO select sample rate
     let config = device
-        .default_input_config()
-        .map_err(|_| "Failed to get device config")?;
+        .default_input_config()?;
     println!("using default sample rate: {}", config.sample_rate().0);
     let stream = build_stream(device, config)?;
     let _ = stream.play().unwrap();
     loop {}
 }
 
-fn main() -> Result<(), &'static str> {
+fn main() -> Result<(), anyhow::Error>{
     let host = cpal::default_host();
 
-    if let Ok(devices) = host.input_devices() {
-        let devices: Vec<_> = devices.collect();
-        let indices = (0..).map(|i| i.to_string());
-        let device_names = devices.iter().map(|d| d.name().unwrap_or("".to_string()));
-        for (i, name) in std::iter::zip(indices, device_names) {
-            println!("{i} - {name}")
-        }
+    let devices = host.input_devices()? ;
+    let device_names: Vec<_> = devices.map(|d| d.name().unwrap_or("".to_string())).collect();
+    for (i, name) in  device_names.iter().enumerate() {
+         
+        println!("{i} - {name}")
+    }
 
-        println!("");
-        let selected =
-            get_index_from_user(devices.len() - 1).map_err(|_| "Failed to read from stdin")?;
-        run_app(&devices[selected])?;
-    } else {
-        return Err("This computer has no supported audio hosts");
+    println!("");
+    let selected =
+        get_index_from_user(device_names.len() - 1)?;
+    
+    if let Some(device) = host.input_devices()?.find(|d| d.name().map(|y| y == device_names[selected]).unwrap_or(false)) {
+        run_app(&device)?;
     }
 
     Ok(())
