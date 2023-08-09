@@ -120,6 +120,7 @@ fn run_app(device: &Device) -> Result<(), &'static str> {
     let config = device
         .default_input_config()
         .map_err(|_| "Failed to get device config")?;
+    println!("using default sample rate: {}", config.sample_rate().0);
     let stream = build_stream(device, config)?;
     let _ = stream.play().unwrap();
     loop {}
